@@ -1,0 +1,8 @@
+## Interface: 70200
+
+## Title: Lib: MayronDB
+## Notes: A lightweight database for additional AddOn database functionality
+## Author: Mayron
+
+LibStub.lua
+LibMayronDB.lua
