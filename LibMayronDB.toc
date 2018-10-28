@@ -1,0 +1,11 @@
+## Interface: 80000
+## Title: LibMayronDB
+## Author: Mayron
+## Version: 2.0
+## Note: A Database
+## SavedVariables: TestDB
+## Dependencies: LibMayronObjects
+
+
+LibMayronDB.lua
+LibMayronDB.Test.lua

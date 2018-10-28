@@ -40,9 +40,8 @@ local function NewProfileIndex_Test1()
     print("NewProfileIndex_Test1 Started");
 
     db:OnStartUp(function(self, addOnName)
-        -- self.profile.hello[2].pigs = true;
-        self:SetPathValue(self.profile, "hello[2].pigs", true);
-        assert(self.profile.hello[2].pigs == true, "Failed to Index");
+       self:SetPathValue(self.profile, "hello[2].pigs", true);
+       assert(self.profile.hello[2].pigs == true, "Failed to Index");
 
         self.profile.hello = nil;
         print("NewProfileIndex_Test1 Successful!");
@@ -96,9 +95,9 @@ local function UsingParentObserver_Test2()
 
         -- this should use SetPathValue to build path into child table
         self.profile.myChild.events.MyEvent1 = false;
-
-        self.profile.myChild:Print();
         assert(self.profile.myChild:ToSavedVariable().events.MyEvent1 == false, "Should be set!");
+        self.profile.myParent = nil;
+        self.profile.myChild = nil;
 
         print("UsingParentObserver_Test2 Successful!");
     end);    
@@ -124,7 +123,7 @@ local function UsingParentObserver_Test3()
         self.profile.myChild = {};
         self.profile.myChild:SetParent(self.profile.myParent);
 
-        self.profile.myChild.events.MyEvent1 = false; --! This uses "usingChild" for the index changed because events did not exist
+        self.profile.myChild.events.MyEvent1 = false;
         self.profile.myParent.events.MyEvent1 = {message = "hello"}; -- correctly assigns value to parent
 
         assert(self.profile.myChild.events.MyEvent1 == false, "Should still equal false!");
@@ -134,14 +133,47 @@ local function UsingParentObserver_Test3()
     end);    
 end
 
+local function UpdatingToDefaultValueShouldRemoveSavedVariableValue_Test1()
+    print("UpdatingToDefaultValueShouldRemoveSavedVariableValue_Test1 Started");
+
+    db:OnStartUp(function(self, addOnName)
+
+        self:AddToDefaults("profile.subtable.options", {
+            option1 = true,
+            option2 = "abc",
+            option3 = false,
+            option4 = {
+                value1 = 10,
+                value2 = 20,
+                value3 = 30
+            }
+        });
+
+        self.profile.subtable.options.option4.value2 = 5000;
+
+        -- does not work first time (must be using internalTree to mess things up)
+        local options = self.profile.subtable.options:ToSavedVariable();
+        assert(type(options) == "table", "Should be a table but got "..tostring(options));       
+        assert(options.option4.value2 == 5000, "Should still equal false!");
+
+        self.profile.subtable.options.option4.value2 = 20;
+
+        -- setting this back to default should remove it from the saved variable table... and should CLEAN UP!
+        
+
+        print("UpdatingToDefaultValueShouldRemoveSavedVariableValue_Test1 Successful!");
+    end); 
+end
+
 -- Uncomment to delete test database
 -- db:OnStartUp(function(self, addOnName)
 --     TestDB = {};
 -- end);
 
---OnStartUp_Test1();
---ChangeProfile_Test1();
---NewProfileIndex_Test1();
---UsingParentObserver_Test1()
---UsingParentObserver_Test2();
---UsingParentObserver_Test3();
+-- OnStartUp_Test1();
+-- ChangeProfile_Test1();
+-- NewProfileIndex_Test1();
+-- UsingParentObserver_Test1()
+-- UsingParentObserver_Test2();
+-- UsingParentObserver_Test3();
+-- UpdatingToDefaultValueShouldRemoveSavedVariableValue_Test1()

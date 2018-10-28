@@ -13,6 +13,8 @@ Observer.Static:AddFriendClass("Helper");
 local select, _G = select, _G;
 local tonumber, strsplit = tonumber, strsplit;
 
+--local internalTree = {};
+
 -- OnAddOnLoadedListener
 local OnAddOnLoadedListener = CreateFrame("Frame");
 OnAddOnLoadedListener:RegisterEvent("ADDON_LOADED");
@@ -25,6 +27,22 @@ OnAddOnLoadedListener:SetScript("OnEvent", function(self, _, addOnName)
         database:Start();        
     end
 end);
+
+local function GetNextPath(path, key)
+    if (path ~= nil) then    
+        if (tonumber(key)) then
+            key = string.format("%s[%s]", path, key);
+        else
+            return string.format("%s.%s", path, key);
+        end
+    else
+        if (tonumber(key)) then
+            key = string.format("[%s]", key);
+        end
+
+        return key;
+    end
+end
 
 ------------------------
 -- Database API
@@ -137,8 +155,8 @@ function Database:Start(data)
     -- create Profile and Global accessible observers:
 
     local currentProfile = self:GetCurrentProfile();
-    self.profile = Observer(data.sv.profiles[currentProfile], data.helper, false, data.defaults.profile);
-    self.global = Observer(data.sv.global, data.helper, true, data.defaults.global);
+    self.profile = Observer(data.helper, false, data.sv.profiles[currentProfile], data.defaults.profile);
+    self.global = Observer(data.helper, true, data.sv.global, data.defaults.global);
 
     data.loaded = true;
 
@@ -169,7 +187,7 @@ Adds a value to the database defaults table relative to the path: defaults.<path
 ]]
 Framework:DefineParams("string", "?any");
 function Database:AddToDefaults(data, path, value)
-    db:SetPathValue(data.defaults, path, value);
+    self:SetPathValue(data.defaults, path, value);
 end
 
 --[[
@@ -409,14 +427,12 @@ end
 Do NOT call this manually! Should only be called by the library to create a new 
 observer that controls a database table.
 ]]
-Framework:DefineParams("table", "Helper", "boolean", "?table", "?string");
-function Observer:__Construct(data, svTable, helper, isGlobal, defaults, path)
-    data.svTable = svTable;
+Framework:DefineParams("Helper", "boolean", "?table", "?table");
+function Observer:__Construct(data, helper, isGlobal, svTable, defaults)
     data.helper = helper;       
-    data.defaults = defaults;
     data.isGlobal = isGlobal;
-    data.path = path;
-    
+    data.svTable = svTable;
+    data.defaults = defaults;
     data.internalTree = {};
     data.database = helper:GetDatabase();
 end
@@ -426,15 +442,7 @@ When a new value is being added to the database, use the child observer's table 
 switched to using a parent observer. Also, add to the saved variable table if not a function.
 ]]
 Observer.Static:OnIndexChanging(function(self, data, key, value)
-    if (data.usingChild) then
-        local svTable = data.usingChild.svTable;
-        local path = string.format("%s.%s", data.usingChild.path, key);
-
-        data.database:SetPathValue(svTable, path, value);
-        return true; -- prevent indexing
-    end
-
-    data.svTable[key] = value;
+    data.helper:HandlePathValueChange(data, key, value);    
     return true; -- prevent indexing
 end);
 
@@ -447,23 +455,28 @@ Observer.Static:OnIndexed(function(self, data, key, realValue)
     end
     
     if (not data.svTable) then
-        return nil;
+        if (not data.defaults) then
+            return nil;
+        end
+        -- it is already indexing the defaults table so continue...
+        return data.helper:GetNextDefaultValue(data, data.defaults, key);
     end
 
-    local foundValue = data.svTable[key];
+    local foundValue = data.svTable[key];    
 
     if (type(foundValue) == "table") then
+        -- convert saved variable table into an Observer
         foundValue = data.helper:GetNextObserver(data, foundValue, key);
     end
     
     -- check parent if still not found
-    if (foundValue == nil and data.parent) then        
-        foundValue = data.helper:GetValueFromParent(data, data.parent, key);      
+    if (foundValue == nil and data.parent) then 
+        foundValue = data.helper:GetNextParentValue(data, data.parent, key);
     end
     
     -- check defaults if still not found 
-    if (foundValue == nil and type(data.defaults) == "table") then
-        foundValue = data.defaults[key];
+    if (foundValue == nil and data.defaults) then
+        foundValue = data.helper:GetNextDefaultValue(data, data.defaults, key);    
     end      
 
     return foundValue;
@@ -643,7 +656,7 @@ function Helper:GetDatabase(data)
 end
 
 do
-    local function Next(tbl, key, parsing)
+    local function getNextTable(tbl, key, parsing)
         local previous = tbl;
 
         if (tbl[key] == nil) then
@@ -654,36 +667,57 @@ do
         return previous, tbl[key];
     end
 
-    --[[
-    @param (string) path: The path address used to identify a value inside the database.
-    Can include square brackets and numbers: "db.profile.aModule['a value'][5]".
-    Unlike ParsePathValue, this will create new tables in the path if they do not exist!
-    @param (optional | table) root: The root table to search through. Default is db.
-    @return: the last table and key pair from the path address.
-    --]]
-    Framework:DefineParams("table", "string");
-    Framework:DefineReturns("table", "string");
-    function Helper:GetLastTableKeyPairs(_, rootTable, path, parsing)
+    local isEmpty;
+
+    isEmpty = function(tbl)
+        if (tbl == nil) then
+            return true;
+        end
+
+        for key, value in pairs(tbl) do
+            if (type(value) ~= "table" or not isEmpty(value)) then
+                return false;
+            end
+        end
+
+        return true;
+    end
+
+    Framework:DefineParams("table", "string", "?boolean", "?boolean");
+    function Helper:GetLastTableKeyPairs(_, rootTable, path, parsing, cleaning)
         local nextTable = rootTable;
         local lastTable;
         local lastKey;
 
-        for _, pathSection in ipairs({strsplit(".", path)}) do            
-            
+        for _, pathSection in ipairs({strsplit(".", path)}) do
             lastKey = strsplit("[", pathSection);
-            lastTable, nextTable = Next(nextTable, lastKey, parsing);
+            lastTable, nextTable = getNextTable(nextTable, lastKey, parsing);
+            
+            if (cleaning and isEmpty(nextTable)) then
+                if (type(lastTable) == "table") then
+                    lastTable[lastKey] = nil;
+                end
+                return nil;
+            end
 
             if (pathSection:find("%b[]")) then
 
-                -- extraSection = ["key"]                
+                -- extraSection could be `path["key"]`
                 for extraSection in pathSection:gmatch("(%b[])") do
                     -- remove square brackets (i.e. "key")
                     local extraKey = extraSection:match("%[(.+)%]");
 
                     lastKey = tonumber(extraKey) or extraKey;
-                    lastTable, nextTable = Next(nextTable, lastKey, parsing);
+                    lastTable, nextTable = getNextTable(nextTable, lastKey, parsing);
 
                     if (parsing and lastTable == nil) then
+                        return nil;
+                    end
+
+                    if (cleaning and isEmpty(nextTable)) then
+                        if (type(lastTable) == "table") then
+                            lastTable[lastKey] = nil;
+                        end
                         return nil;
                     end
                 end
@@ -695,7 +729,7 @@ do
         end
 
         return lastTable, lastKey;
-    end
+    end    
 end
 
 Framework:DefineParams("string", "table");
@@ -724,35 +758,47 @@ end
 
 Framework:DefineParams("table", "table", "any"); -- should be string or integer
 Framework:DefineReturns("Observer");
-function Helper:GetNextObserver(data, currentObserverData, svTable, key)
+function Helper:GetNextObserver(data, previousObserverData, svTable, key)
     -- create Observer to represent found saved vairable sub-table
-    local nextPath;
-    local nextDefaults;
 
-    if (currentObserverData.path ~= nil) then
-        nextPath = string.format("%s.%s", currentObserverData.path, key);
-    else
-        nextPath = key;
-    end
+    local nextObserver = previousObserverData.internalTree[key] or 
+        Observer(self, previousObserverData.isGlobal, svTable);
 
-    if (type(currentObserverData.defaults) == "table") then
-        nextDefaults = currentObserverData.defaults[key];
-    end
-
-    local nextObserver = currentObserverData.internalTree[key] or Observer(
-        svTable, self, currentObserverData.isGlobal, nextDefaults, nextPath);
-
-    currentObserverData.internalTree[key] = nextObserver; -- store for later use
-
-    -- if a parent observer was switched to during a child path address query then 
-    -- keep a history of the used child (for when an index value is changed)
-    if (currentObserverData.usingChild) then
-        self:SetChild(nextObserver, currentObserverData.isGlobal, nextPath);
-    else
-        self:RemoveChild(nextObserver);
-    end
+    previousObserverData.internalTree[key] = nextObserver; -- store for later use
+    self:UpdateObserver(previousObserverData, nextObserver, key);
 
     return nextObserver;
+end
+
+Framework:DefineParams("table", "Observer", "any") -- should be string or number
+function Helper:GetNextParentValue(data, previousObserverData, parent, key)
+    -- does not need to be converted to Observer as it already is one
+    local nextValue = parent[key]; 
+
+    if (type(nextValue) ~= "table") then
+        return nextValue;
+    end
+    
+    self:UpdateObserver(previousObserverData, nextValue, key);
+
+    return nextValue;
+end
+
+Framework:DefineParams("table", "table", "any") -- should be string or number
+function Helper:GetNextDefaultValue(data, previousObserverData, defaults, key)
+    local nextValue = defaults[key];
+
+    if (type(nextValue) ~= "table") then
+        return nextValue;
+    end  
+
+    local defaultObserver = previousObserverData.internalTree[key] 
+        or Observer(self, previousObserverData.isGlobal, nil, nextValue);
+
+    previousObserverData.internalTree[key] = defaultObserver; -- store for later use
+    self:UpdateObserver(previousObserverData, defaultObserver, key);
+
+    return defaultObserver;
 end
 
 Framework:DefineParams("table", "?number");
@@ -793,46 +839,6 @@ function Helper:PrintTable(_, tbl, depth, n)
     end
 end
 
-Framework:DefineParams("table", "Observer", "any") -- should be string or number
-function Helper:GetValueFromParent(data, childData, parent, key)
-    local nextParentValue = parent[key];    
-
-    if (type(nextParentValue) ~= "table") then
-        return nextParentValue;
-    end
-
-    -- should be an observer if value is a table because it was indexed    
-    local nextChildPath;
-    
-    if (childData.path ~= nil) then
-        nextChildPath = string.format("%s.%s", childData.path, key);
-    else
-        nextChildPath = key;
-    end   
-    
-    self:SetChild(nextParentValue, childData.isGlobal, nextChildPath);
-
-    return nextParentValue;
-end
-
-Framework:DefineParams("Observer", "boolean", "string");
-function Helper:SetChild(data, observer, isGlobal, childPath)    
-    local observerData = data:GetFriendData(observer);    
-    local usingChildInfo = {};
-    local rootObserver = (isGlobal and data.database.global) or data.database.profile;
-
-    usingChildInfo.svTable = rootObserver:ToSavedVariable();
-    usingChildInfo.path = childPath;
-
-    observerData.usingChild = usingChildInfo;
-end
-
-Framework:DefineParams("Observer");
-function Helper:RemoveChild(data, observer)    
-    local observerData = data:GetFriendData(observer);
-    observerData.usingChild = nil;
-end
-
 Framework:DefineParams("Observer");
 Framework:DefineReturns("string");
 function Helper:GetDatabaseRootTableName(data, observer) 
@@ -843,5 +849,111 @@ function Helper:GetDatabaseRootTableName(data, observer)
     end
 
     local currentProfile = data.database:GetCurrentProfile();
-    return string.format("profile.%s", currentProfile);
+    return string.format("profile[%s]", currentProfile);
+end
+
+do
+    local equals;
+
+    equals = function(value1, value2, shallowEquals)
+        local type1 = type(value1);
+    
+        if (type(value2) == type1) then
+    
+            if (type1 == "table") then
+                if (shallowEquals) then
+                    return tostring(value1) == tostring(value2);
+                else
+                    for id, value in pairs(value1) do
+                        if (not equals(value, value2[id])) then
+                            return false;
+                        end
+                    end
+                end
+    
+                return true;
+            elseif (type1 == "function") then
+                return tostring(value1) == tostring(value2);
+            else
+                return value1 == value2;
+            end        
+        end
+    
+        return false;
+    end
+
+    Framework:DefineParams("table", "any", "?any");
+    function Helper:HandlePathValueChange(data, observerData, key, value)
+        local path;    
+        local defaultRootTable;
+        local svRootTable;
+
+        if (observerData.usingChild) then
+            svRootTable = observerData.usingChild.svTable;
+            path = observerData.usingChild.childPath;
+        else
+            path = observerData.path;
+
+            if (observerData.isGlobal) then
+                svRootTable = data.dbData.sv.global;
+            else    
+                local currentProfile = data.database:GetCurrentProfile();
+                svRootTable = data.dbData.sv.profiles[currentProfile];
+            end
+        end
+
+        if (observerData.isGlobal) then
+            defaultRootTable = data.dbData.defaults.global;
+        else
+            defaultRootTable = data.dbData.defaults.profile;
+        end
+
+        indexingPath = GetNextPath(path, key);
+
+        local defaultValue = data.database:ParsePathValue(defaultRootTable, indexingPath);
+        
+        if (not equals(defaultValue, value)) then
+            -- different from default value so add it
+            data.database:SetPathValue(svRootTable, indexingPath, value);
+        else
+            -- same as default value so remove it from saved variables table
+            data.database:SetPathValue(svRootTable, indexingPath, nil);
+            self:GetLastTableKeyPairs(svRootTable, indexingPath, true, true); -- clean
+        end
+    end
+end
+
+Framework:DefineParams("table", "Observer", "any");
+function Helper:UpdateObserver(data, parentData, observer, key)
+    local observerData = data:GetFriendData(observer);
+
+    observerData.isDefault = (not observerData.svTable);
+
+    -- get next path
+    observerData.path = GetNextPath(parentData.path, key);
+
+    -- get next defaults table
+    if (type(parentData.defaults) == "table") then
+        observerData.defaults = parentData.defaults[key];
+    end
+
+    -- get next child
+    if (parentData.usingChild) then        
+        local svTable;
+        
+        if (observerData.isGlobal) then
+            svTable = data.dbData.sv.global;
+        else
+            local currentProfile = data.database:GetCurrentProfile();
+            svTable = data.dbData.sv.profiles[currentProfile];
+        end
+
+        observerData.usingChild = {
+            svTable = svTable, 
+            childPath = GetNextPath(parentData.childPath, key)
+        };
+
+    else
+        observerData.usingChild = nil;
+    end
 end
