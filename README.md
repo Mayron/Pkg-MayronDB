@@ -2,11 +2,10 @@
 
 * A new lightweight database designed for smart use. 
 * Originally created for MayronUI, but has been created for general use. 
-* Supports a defaults table and database table inheritance.
+* The framework is designed for World of Warcraft AddOn development and supports both Classic and Retail editions (just make sure that you update the toc version number appropriately for whichever edition you require it for).
+* Supports a defaults table and database table inheritance with many feature-rich helper functions.
 * The functions in the API are named the same as those found in the AceDB for developers to easily 
 familiarise themselves with it. However, some functions support additional functionality.
-
-**Note: The zip file contains the LibMayronObjects dependency!**
 
 # How it works
 
