@@ -6,6 +6,7 @@
 ## Works with classic and retail, just update the toc version number if using as a standalone AddOn
 
 LibStub.lua
+LibMayronObjects.lua
 LibMayronDB.lua
 
 ## Uncomment this for testing:
