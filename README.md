@@ -1,4 +1,4 @@
-# About LibMayronDB
+# 1: About LibMayronDB
 
 * A new lightweight database designed for smart use. 
 * Originally created for MayronUI, but has been created for general use. 
@@ -7,7 +7,11 @@
 * The functions in the API are named the same as those found in the AceDB for developers to easily 
 familiarise themselves with it. However, some functions support additional functionality.
 
-# How it works
+## 1.1: NOTE:
+
+There is a Test.lua file to see other working examples of how to use the Library!
+
+# 2: How it works
 
 Using a query, such as `db.profile.aModule.aValue`, will use the Observer framework to select the correct profile 
 table (using `db.profile`), or the global table (using `db.global`). Observers are tables/nodes in the database 
@@ -23,19 +27,19 @@ defaults table at the given path address, then it will be removed from the saved
 by setting the template as a parent: `db.profile.aFrame:SetParent(db.profile.frameTemplate)`.
 * Using `db.profile` will point to the character's current profile automatically.
 
-### Path addresses vs Observers using `db.profile.aTable` as an example:
+### 2.1: Path addresses vs Observers using `db.profile.aTable` as an example:
 
 * Both `db.profile` and `db.profile.aTable` are Observers.
 * `db.profile` holds the path address `"db.profile"`.
 * `db.profile.aTable` holds the path address `"db.profile.aTable"`.
 
-### Three steps occur when indexing an Observer:
+### 2.2: Three steps occur when indexing an Observer:
 
 *  Check if the key/value pair is located in the saved variable table.
 *  If not found, check if the key/value pair is located in the defaults table.
 *  If not found, check if the Observer has a parent. If it does, repeat step 1 using the parent Observer.
 
-# Starting the Database
+# 3: Starting the Database
 
 * Make sure you load the library before loading your addon!
 * **MY_ADDON_DB** represents the saved variable registered in the `toc` file to store your database (example: MyAddonDB).
@@ -56,7 +60,7 @@ db:OnStart(function(self)
 end);
 ```
 
-# Adding Default Database Values
+# 4: Adding Default Database Values
 
 For both methods, you can add database default values **before and after** starting the database:
 
@@ -69,7 +73,7 @@ db:AddToDefaults("profile.newModule", {
 });
 ```
 
-# Using the Database
+# 5: Using the Database
 
 Then, once the database has been successfully started, you can start adding onto the `db.global` and
 `db.profile` tables (Observers) like a standard table.
@@ -86,7 +90,7 @@ db:SetProfile("new profile");
 print(db.profile.newModule.width); -- fails because newModule table is not stored on "new profile"
 ```
 
-# Library Functions
+# 6: Library Functions
 
 ## LibMayronDB:CreateDatabase(svName, addonName)
 
@@ -122,7 +126,7 @@ Gets the database registered with the specified AddOn name. Must be registered u
 
 Returns `addOnName, db (the database object)` for each registered database (using `db:CreateDatabase()`) per iteration.
 
-# Database API
+# 7: Database API
 
 ## db:OnStart(func)
 
@@ -337,7 +341,7 @@ Returns the name of the database which will be the addon name and the saved vari
 | ---- | ----------- |
 | **string** | The name of the database. |
 
-# Observer API
+# 8: Observer API
 
 ## Observer:SetParent(parentObserver)
 Used to achieve database inheritance. If an observer cannot find a value, it uses the value found in the 
