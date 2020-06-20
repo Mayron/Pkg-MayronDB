@@ -168,7 +168,7 @@ Can be used without the database being initialized.
 db:AddToDefaults("profile.aModule['red theme'][10].object", value);
 ```
 
-## db:PrintDefaults(depth, path)[/COLOR][/SIZE]
+## db:PrintDefaults(depth, path)
 A helper function to print the defaults table.
 
 #### Parameters:
