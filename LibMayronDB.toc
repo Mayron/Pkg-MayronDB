@@ -1,7 +1,7 @@
 ## Interface: 11302
 ## Title: LibMayronDB
 ## Notes: A database for World of Warcraft
-## Version: 2.8
+## Version: 2.8.1
 
 ## Works with classic and retail, just update the toc version number if using as a standalone AddOn
 
