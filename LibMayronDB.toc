@@ -1,12 +1,9 @@
-## Interface: 11302
+## Interface: 90001
 ## Title: LibMayronDB
-## Notes: A database for World of Warcraft
-## Version: 2.8.1
+## Notes: An embedded database for World of Warcraft
+## Version: 2.8.2
+## Dependencies: LibMayronObjects
 
-## Works with classic and retail, just update the toc version number if using as a standalone AddOn
-
-LibStub.lua
-LibMayronObjects.lua
 LibMayronDB.lua
 
 ## Uncomment this for testing:
