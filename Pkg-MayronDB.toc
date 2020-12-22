@@ -1,7 +1,7 @@
 ## Interface: 90002
 ## Title: Pkg-MayronDB
 ## Notes: An embedded database for World of Warcraft
-## Version: 3.0
+## Version: 3.0.1
 ## Dependencies: MayronObjects
 
 Pkg-MayronDB.lua
